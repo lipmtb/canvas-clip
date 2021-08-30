@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>canvasBase01-2021-08-28</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        .avatar-canvas {
+            width: 300px;
+            margin: 10px auto;
+            border: 1px solid;
+        }
+
+        #mycanvas {
+
+            background-color: aliceblue;
+        }
+
+        form#addinfoform {
+            width: 600px;
+            margin: 0 auto;
+            background-color: rgb(218, 207, 194);
+            padding: 10px;
+        }
+
+        form#addinfoform label {
+            display: block;
+            margin: 10px 0;
+        }
+
+        form#addinfoform input {
+            outline: none;
+            border: 1px solid #eee;
+            line-height: 24px;
+            padding-left: 2px;
+        }
+
+        form#addinfoform span.pre-text {
+            display: inline-block;
+            width: 80px;
+        }
+
+        form#addinfoform #btn-addimg {
+            display: inline-block;
+            background-color: #ccc;
+            border-radius: 6px;
+            padding: 4px 6px;
+            cursor: pointer;
+        }
+
+        form#addinfoform #btn-addimg:hover {
+            background-color: chocolate;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+        <form id="addinfoform" action="http://127.0.0.1:82/avatar/changeAvatar" method="post"
+            enctype="multipart/form-data">
+            <label for="username">
+                <span class="pre-text">用户名：</span>
+                <input type="text" id="username" name="username" />
+            </label>
+            <label for="psw">
+                <span class="pre-text">密码：</span>
+                <input type="password" id="psw" name="userpsw" />
+            </label>
+
+
+
+
+            <!-- 裁剪头像canvas -->
+            <div class="avatar-canvas">
+                <canvas id="mycanvas" width=300" height="300"></canvas>
+            </div>
+
+
+            <!-- 图片选择区域 -->
+            <input type="file" name="newfile" id="select-img" style="display:none;" onchange="newImgSelected(event)" />
+            <label for="select-img" id="btn-addimg">上传新头像</label>
+            <div class="resize-img" style="width:300px;height:300px;border:1px solid #eee;
+            position:relative;background-size:300px 300px;background-repeat: no-repeat;">
+                <div class="mod" style="position:absolute;left:0;top:0;
+                    right:0;bottom:0;background-color: rgba(27, 27, 27, 0.788);">
+                    <div id="curtain" style="position:absolute;width:80px;
+                        height:80px;left:110px;top:110px;background-size:300px 300px;
+                        background-repeat: no-repeat;background-color: #fff;cursor:grab;border-radius: 50%;">
+
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="send-postdata">
+                <button id="send-btn">提交</button>
+            </div>
+        </form>
+
+
+    </div>
+<script src="./ajax.js"></script>
+    <script>
+        let sendBtn=null;
+        let fileImg = null;
+        let resizeImg = null;
+        let curtainbox = null;
+        let curtainboxwidth = 80;
+        let imgtmpurl = ""; //临时选择的图片blob
+        let avatarimg = null; //绘制的源图片
+
+        let mycanvas = null;
+        let ctx = null;
+        let fandoufn = null;
+        let resImgLeft = 150; //裁剪后的头像位置
+        let resImgTop = 150;
+
+        //思路三个区域（移动窗格区域，canvas绘制区域display:none,显示裁剪后的头像区域）：用户移动窗格，将新的resImgLeft,resTimgTop绘制新的canvas,将新的canvas生成toDataURL或者toBlob,url.createObjectURL临时显示出来
+        let canvasOutoutImg = ""; //canvas裁剪后的最终图片，随着用户移动窗格改变
+        document.addEventListener("DOMContentLoaded", () => {
+            //post发送数据
+            sendBtn=document.getElementById("send-btn");
+            sendBtn.addEventListener("click",function(e){
+                e.preventDefault();
+                    let canvasFinal=document.querySelector(".avatar-canvas").firstElementChild;
+                    canvasFinal.toBlob((blobdata)=>{
+                        console.log(blobdata);//Blob
+                        postdata({
+                            url:"http://localhost:82/test/canvasUpload",
+                            data:{
+                                username:"ddd",
+                                psw:123456,
+                                canvasimg:new File([blobdata],"avatar.png",{type:"image/png"})
+                            }
+                        }).then((res)=>{
+                            console.log("post canavas img data",res);
+                        })
+                    })
+            })
+            mycanvas = document.getElementById("mycanvas");
+            ctx = mycanvas.getContext("2d");
+            fandoufn = fandou(refillCanvas, 100);
+            curtainbox = document.getElementById("curtain");
+
+            resizeImg = document.querySelector(".resize-img");
+
+            function onmousemovecurtain(e) {
+                // console.log("moving",e.clientX);
+                let newPosLeft = e.clientX - this.innerX - resizeImg.offsetLeft;
+                let newPosTop = e.clientY - this.innerY - resizeImg.offsetTop;
+                if (newPosLeft <= 0) {
+
+                    newPosLeft = 0;
+                }
+                if (newPosLeft >= resizeImg.offsetWidth - curtainbox.offsetWidth) {
+                    newPosLeft = resizeImg.offsetWidth - curtainbox.offsetWidth;
+                }
+
+                if (newPosTop <= 0) {
+                    newPosTop = 0;
+                }
+                if (newPosTop >= resizeImg.offsetHeight - curtainbox.offsetHeight) {
+                    newPosTop = resizeImg.offsetHeight - curtainbox.offsetHeight;
+                }
+                curtainbox.style.left = newPosLeft + "px";
+                curtainbox.style.top = newPosTop + "px";
+                curtainbox.style.backgroundPositionX = -newPosLeft + "px";
+                curtainbox.style.backgroundPositionY = -newPosTop + "px";
+
+                resImgLeft = newPosLeft + curtainboxwidth / 2;
+                resImgTop = newPosTop + curtainboxwidth / 2;
+
+                fandoufn();
+            }
+            curtainbox.addEventListener("mousedown", function (e) {
+
+                this.innerX = e.clientX - (resImgLeft - curtainboxwidth / 2) - resizeImg.offsetLeft;
+                this.innerY = e.clientY - (resImgTop - curtainboxwidth / 2) - resizeImg.offsetTop;
+
+                curtainbox.addEventListener("mousemove", onmousemovecurtain, false);
+
+            })
+
+            curtainbox.addEventListener("mouseup", function () {
+                curtainbox.removeEventListener("mousemove", onmousemovecurtain, false)
+            })
+
+            curtainbox.addEventListener("mouseleave", function () {
+
+                curtainbox.removeEventListener("mousemove", onmousemovecurtain, false)
+            })
+
+        })
+
+
+        function fandou(fn, delay) {
+            let timerout = null;
+            return () => {
+                if (timerout) {
+                    clearTimeout(timerout);
+                }
+                timerout = setTimeout(fn, delay);
+            }
+        }
+
+        //canvas新绘制（需要裁剪）
+        function refillCanvas() {
+            let newCanvas=document.createElement("canvas");
+            newCanvas.width=300;
+            newCanvas.height=300;
+            newCanvas.id="mycanvas";
+            let fathBox=document.querySelector(".avatar-canvas");
+            // console.log(fathBox.firstElementChild);
+            fathBox.replaceChild(newCanvas,fathBox.firstElementChild);
+            ctx=newCanvas.getContext("2d");
+            if (ctx && avatarimg) {
+                ctx.clearRect(0, 0, 300, 300);
+
+                setTimeout(() => {
+                    ctx.beginPath();
+                    ctx.arc(resImgLeft, resImgTop, 40, 0, 2 * Math.PI, false);
+                    ctx.clip();
+
+                    ctx.drawImage(avatarimg, 0, 0, 300, 300);
+                })
+
+
+            }
+        }
+
+
+        // 选择新图片
+        function newImgSelected(e) {
+            // console.log(e.currentTarget);
+            if (imgtmpurl) {
+                fileImg = null;
+                URL.revokeObjectURL(imgtmpurl);
+                resImgLeft = 150;
+                resImgTop = 150;
+            }
+
+            fileImg = e.currentTarget.files[0];
+
+            imgtmpurl = URL.createObjectURL(fileImg); //临时选择的图片
+            resizeImg.style.backgroundImage = `url(${imgtmpurl})`;
+            curtainbox.style.backgroundImage = `url(${imgtmpurl})`;
+
+            curtainbox.style.backgroundPositionX = -(resImgLeft - curtainboxwidth / 2) + "px";
+            curtainbox.style.backgroundPositionY = -(resImgTop - curtainboxwidth / 2) + "px";
+
+
+
+            avatarimg = new Image(); //canvas将要绘制的图片
+            avatarimg.onload = () => {
+
+                refillCanvas();
+            }
+            avatarimg.src = imgtmpurl;
+
+        }
+    </script>
+</body>
+
+</html>
